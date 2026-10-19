@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Трекер задач</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="theme-color" content="#2f7d5b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Задачи">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root{
+  --bg:#f5f6f8;--card:#fff;--text:#1d2330;--muted:#6b7385;--line:#e3e6ec;
+  --accent:#2f7d5b;--accent-soft:#e1f1e9;--today:#fff4cc;--weekend:#f9fafb;--danger:#c0392b;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#14171c;--card:#1c2027;--text:#e6e9ef;--muted:#98a0b0;--line:#2e343e;
+  --accent:#4cb487;--accent-soft:#1d382c;--today:#3a3420;--weekend:#191c22;--danger:#e57368;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+html{-webkit-text-size-adjust:100%}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.wrap{max-width:1100px;margin:0 auto;padding:16px;
+  padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom));
+  padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+input[type=text]{font-size:16px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+h1{font-size:20px;margin:0}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs button{border:0;background:none;color:var(--muted);padding:6px 14px;border-radius:7px;font:inherit;cursor:pointer}
+.tabs button.active{background:var(--accent);color:#fff}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.nav{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.nav h2{font-size:17px;margin:0 8px;min-width:200px;text-align:center}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--danger)}
+.btn.icon{padding:4px 10px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:center;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600}
+th.name,td.name{text-align:left;position:sticky;left:0;background:var(--card);z-index:1;white-space:normal;min-width:140px;max-width:260px;padding-right:10px}
+td.total,th.total{font-weight:600;padding-left:10px}
+th.today{background:var(--today);border-radius:6px 6px 0 0;color:var(--text)}
+td.today{background:var(--today)}
+.weekend{background:var(--weekend)}
+.cell{width:38px;height:38px;border:2px solid var(--line);border-radius:9px;background:var(--card);color:transparent;font-size:20px;font-weight:700;cursor:pointer;line-height:1}
+.cell:hover{border-color:var(--accent)}
+.cell.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.cell.future{opacity:.45}
+.month .cell{width:24px;height:24px;border-radius:6px;font-size:13px;border-width:1.5px}
+.month th,.month td{padding:4px 1px}
+tfoot td{color:var(--muted);font-size:12px;border-bottom:0}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:4px}
+.bar>i{display:block;height:100%;background:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat b{display:block;font-size:24px}
+.stat span{color:var(--muted);font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:30px 10px}
+.tasklist{list-style:none;margin:0;padding:0}
+.tasklist li{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.tasklist input{flex:1;min-width:0}
+input[type=text]{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit}
+.add{display:flex;gap:8px;margin-top:12px}
+.add input{flex:1;min-width:0}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+.muted{color:var(--muted);font-size:13px}
+.pct{font-size:12px;color:var(--muted);font-weight:400}
+.alert{border-color:#e0a800;background:linear-gradient(0deg,rgba(224,168,0,.08),rgba(224,168,0,.08)),var(--card)}
+.alert.ok{border-color:var(--accent);background:var(--accent-soft)}
+.alert h3{font-size:15px;margin:0 0 8px}
+.alert p{margin:8px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:20px;padding:5px 12px;font:inherit;font-size:14px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip::before{content:"○ ";color:var(--muted)}
+.remind{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.remind label{display:flex;gap:6px;align-items:center;cursor:pointer}
+input[type=time]{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:6px 8px;font:inherit}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal[hidden]{display:none}
+.modal .box{background:var(--card);border-radius:14px;padding:20px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.modal h3{margin:0 0 10px}
+.modal ul{margin:0 0 16px;padding-left:20px}
+@media (max-width:600px){
+  h1{font-size:18px}
+  header{gap:8px}
+  .tabs{width:100%}.tabs button{flex:1;padding:8px 6px}
+  .card{padding:12px}
+  .nav h2{min-width:0;flex:1;font-size:15px;margin:0}
+  .compact{table-layout:fixed}
+  .compact th,.compact td{padding:4px 0}
+  .compact .cell{width:36px;height:36px;max-width:100%}
+  .compact tr.tname td{border-bottom:0;text-align:left;padding:10px 2px 2px;background:none}
+  .compact tr.tname span:first-child{font-weight:600;margin-right:8px}
+  .compact tr.tcells td{padding-bottom:8px}
+  .stats{grid-template-columns:1fr 1fr;gap:8px}
+  .stat{padding:10px}.stat b{font-size:20px}
+}
+@media print{
+  header .tabs,.nav .btn,.tools,.noprint,.alert,.modal{display:none!important}
+  body{background:#fff;color:#000}.card,.stat{border-color:#999}
+  .cell{border-color:#999}.cell.on{background:#fff;color:#000;border-color:#000}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Отчёт выполненных задач</h1>
+    <div class="tabs" id="tabs">
+      <button data-view="week">Неделя</button>
+      <button data-view="month">Месяц</button>
+      <button data-view="tasks">Задачи</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <div class="card noprint">
+    <div class="tools">
+      <button class="btn" id="print">Печать</button>
+      <button class="btn" id="csv">Месяц в Excel (CSV)</button>
+      <button class="btn" id="export">Сохранить резервную копию</button>
+      <button class="btn" id="import">Загрузить копию</button>
+      <input type="file" id="file" accept=".json,application/json" hidden>
+    </div>
+    <p class="muted">Работает без интернета. Данные хранятся на этом устройстве. Время от времени сохраняйте резервную копию.</p>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="box">
+    <h3 id="modalTitle">⏰ Не выполнено сегодня</h3>
+    <ul id="modalList"></ul>
+    <button class="btn primary" id="modalOk">Понятно</button>
+  </div>
+</div>
+
+<script>
+const KEY = 'task-tracker-v1';
+const DOW = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+
+const app = document.getElementById('app');
+let state = load();
+let view = 'week';
+let cursor = new Date();
+
+try { view = localStorage.getItem(KEY + '-view') || 'week'; } catch (e) {}
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.tasks) && s.checks) return withDefaults(s);
+  } catch (e) {}
+  return withDefaults({ tasks: [], checks: {} });
+}
+function withDefaults(s) {
+  s.settings = Object.assign({ remind: false, time: '20:00', last: '' }, s.settings);
+  return s;
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { alert('Не удалось сохранить данные в браузере. Сделайте резервную копию.'); }
+}
+
+const pad = n => String(n).padStart(2, '0');
+const dkey = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const todayKey = () => dkey(new Date());
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const monday = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+const dowIdx = d => (d.getDay() + 6) % 7;
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+const isDone = (k, id) => !!(state.checks[k] && state.checks[k][id]);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function toggle(k, id) {
+  const c = state.checks[k] || (state.checks[k] = {});
+  if (c[id]) delete c[id]; else c[id] = 1;
+  if (!Object.keys(c).length) delete state.checks[k];
+  save(); render();
+}
+
+function cell(d, t) {
+  const k = dkey(d), on = isDone(k, t.id), future = k > todayKey();
+  return `<button class="cell${on ? ' on' : ''}${future ? ' future' : ''}" data-k="${k}" data-id="${t.id}"
+    aria-pressed="${on}" title="${esc(t.name)} — ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}">✓</button>`;
+}
+
+const narrow = matchMedia('(max-width:600px)');
+narrow.addEventListener ? narrow.addEventListener('change', () => render()) : narrow.addListener(() => render());
+
+// Неделя на телефоне: название задачи отдельной строкой, под ним 7 галочек
+function compactWeek(days) {
+  const tk = todayKey();
+  const elapsed = days.filter(d => dkey(d) <= tk).length;
+  const cls = d => dkey(d) === tk ? 'today' : dowIdx(d) >= 5 ? 'weekend' : '';
+  let head = '<tr>' + days.map(d => `<th class="${cls(d)}">${DOW[dowIdx(d)]}<br>${d.getDate()}</th>`).join('') + '</tr>';
+  let body = '';
+  state.tasks.forEach(t => {
+    const done = days.filter(d => isDone(dkey(d), t.id)).length;
+    body += `<tr class="tname"><td colspan="7"><span>${esc(t.name)}</span><span class="pct">${done}/7 · ${pct(done, elapsed)}%</span></td></tr>`;
+    body += '<tr class="tcells">' + days.map(d => `<td class="${cls(d)}">${cell(d, t)}</td>`).join('') + '</tr>';
+  });
+  const foot = '<tr>' + days.map(d => `<td>${state.tasks.filter(t => isDone(dkey(d), t.id)).length}/${state.tasks.length}</td>`).join('') + '</tr>';
+  return `<table class="week compact"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table>
+    <p class="muted" style="text-align:center;margin:4px 0 0">выполнено за день</p>`;
+}
+
+function grid(days, cls) {
+  if (cls === 'week' && narrow.matches) return compactWeek(days);
+  const tk = todayKey();
+  const elapsed = days.filter(d => dkey(d) <= tk).length;
+  let head = '<tr><th class="name">Задача</th>';
+  days.forEach(d => {
+    const k = dkey(d), we = dowIdx(d) >= 5;
+    head += `<th class="${k === tk ? 'today' : we ? 'weekend' : ''}">${DOW[dowIdx(d)]}<br>${d.getDate()}</th>`;
+  });
+  head += '<th class="total">Итого</th></tr>';
+
+  let body = '';
+  state.tasks.forEach(t => {
+    const done = days.filter(d => isDone(dkey(d), t.id)).length;
+    body += `<tr><td class="name">${esc(t.name)}</td>`;
+    days.forEach(d => {
+      const k = dkey(d), we = dowIdx(d) >= 5;
+      body += `<td class="${k === tk ? 'today' : we ? 'weekend' : ''}">${cell(d, t)}</td>`;
+    });
+    body += `<td class="total">${done}/${days.length}<br><span class="pct">${pct(done, elapsed)}%</span></td></tr>`;
+  });
+
+  let foot = '<tr><td class="name">Выполнено за день</td>';
+  days.forEach(d => {
+    const n = state.tasks.filter(t => isDone(dkey(d), t.id)).length;
+    foot += `<td>${n}/${state.tasks.length}</td>`;
+  });
+  foot += '<td></td></tr>';
+
+  return `<div class="scroll"><table class="${cls}"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
+}
+
+function summary(days) {
+  const tk = todayKey();
+  const past = days.filter(d => dkey(d) <= tk);
+  const total = state.tasks.length;
+  let done = 0, perfect = 0;
+  days.forEach(d => {
+    const n = state.tasks.filter(t => isDone(dkey(d), t.id)).length;
+    done += n;
+    if (total && n === total) perfect++;
+  });
+  const possible = past.length * total;
+  let best = null;
+  state.tasks.forEach(t => {
+    const n = days.filter(d => isDone(dkey(d), t.id)).length;
+    if (!best || n > best.n) best = { name: t.name, n };
+  });
+  return { done, possible, perfect, best, p: pct(done, possible) };
+}
+
+const undone = k => state.tasks.filter(t => !isDone(k, t.id));
+
+function chips(k, list) {
+  return `<div class="chips">${list.map(t =>
+    `<button class="chip" data-k="${k}" data-id="${t.id}" title="Отметить выполненной">${esc(t.name)}</button>`).join('')}</div>`;
+}
+
+function banner() {
+  if (!state.tasks.length) return '';
+  const tk = todayKey(), yk = dkey(addDays(new Date(), -1));
+  const today = undone(tk), yest = undone(yk);
+  if (!today.length && !yest.length)
+    return `<div class="card alert ok"><b>✓ Все задачи на сегодня выполнены!</b></div>`;
+  let html = '<div class="card alert">';
+  if (today.length) html += `<h3>Не выполнено сегодня (${today.length} из ${state.tasks.length})</h3>` + chips(tk, today);
+  else html += `<h3>✓ Сегодня всё выполнено</h3>`;
+  if (yest.length) html += `<p class="muted">Пропущено вчера (${yest.length}):</p>` + chips(yk, yest);
+  return html + '<p class="muted">Нажмите на задачу, чтобы отметить её выполненной.</p></div>';
+}
+
+function emptyMsg() {
+  return `<div class="card empty">Задач пока нет.<br><br><button class="btn primary" data-go="tasks">Добавить задачи</button></div>`;
+}
+
+function renderWeek() {
+  const start = monday(cursor);
+  const days = [...Array(7)].map((_, i) => addDays(start, i));
+  const end = days[6];
+  const title = start.getMonth() === end.getMonth()
+    ? `${start.getDate()}–${end.getDate()} ${MONTHS_GEN[end.getMonth()]} ${end.getFullYear()}`
+    : `${start.getDate()} ${MONTHS_GEN[start.getMonth()]} – ${end.getDate()} ${MONTHS_GEN[end.getMonth()]} ${end.getFullYear()}`;
+  const s = summary(days);
+  return `<div class="card">
+    <div class="nav">
+      <button class="btn icon" data-move="-7">‹</button>
+      <h2>${title}</h2>
+      <button class="btn icon" data-move="7">›</button>
+      <button class="btn" data-today>Сегодня</button>
+    </div>
+    ${state.tasks.length ? grid(days, 'week') + `
+      <p style="margin:14px 0 0">За неделю выполнено <b>${s.done}</b> из ${s.possible} (${s.p}%)</p>
+      <div class="bar"><i style="width:${s.p}%"></i></div>` : ''}
+  </div>${state.tasks.length ? '' : emptyMsg()}`;
+}
+
+function renderMonth() {
+  const y = cursor.getFullYear(), m = cursor.getMonth();
+  const n = new Date(y, m + 1, 0).getDate();
+  const days = [...Array(n)].map((_, i) => new Date(y, m, i + 1));
+  const s = summary(days);
+  return `<div class="card">
+    <div class="nav">
+      <button class="btn icon" data-month="-1">‹</button>
+      <h2>${MONTHS[m]} ${y}</h2>
+      <button class="btn icon" data-month="1">›</button>
+      <button class="btn" data-today>Сегодня</button>
+    </div>
+    ${state.tasks.length ? `
+    <div class="stats">
+      <div class="stat"><b>${s.p}%</b><span>выполнено за месяц</span><div class="bar"><i style="width:${s.p}%"></i></div></div>
+      <div class="stat"><b>${s.done} / ${s.possible}</b><span>отметок из возможных</span></div>
+      <div class="stat"><b>${s.perfect}</b><span>дней, когда выполнено всё</span></div>
+      <div class="stat"><b style="font-size:17px">${s.best && s.best.n ? esc(s.best.name) : '—'}</b><span>лучшая задача${s.best && s.best.n ? ` (${s.best.n} дн.)` : ''}</span></div>
+    </div>` + grid(days, 'month') : ''}
+  </div>${state.tasks.length ? '' : emptyMsg()}`;
+}
+
+function renderTasks() {
+  const items = state.tasks.map((t, i) => `<li>
+      <input type="text" value="${esc(t.name)}" data-rename="${t.id}" aria-label="Название задачи">
+      <button class="btn icon" data-up="${i}" ${i === 0 ? 'disabled' : ''} title="Выше">↑</button>
+      <button class="btn icon" data-down="${i}" ${i === state.tasks.length - 1 ? 'disabled' : ''} title="Ниже">↓</button>
+      <button class="btn icon danger" data-del="${t.id}" title="Удалить">✕</button>
+    </li>`).join('');
+  return `<div class="card">
+    <h2 style="font-size:17px;margin:0 0 8px">Список задач</h2>
+    ${items ? `<ul class="tasklist">${items}</ul>` : '<p class="muted">Добавьте задачи, которые нужно отмечать каждый день.</p>'}
+    <form class="add" id="addForm">
+      <input type="text" id="newTask" placeholder="Например: Зарядка, Чтение 30 минут…" autocomplete="off">
+      <button class="btn primary">Добавить</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2 style="font-size:17px;margin:0 0 8px">Напоминание</h2>
+    <div class="remind">
+      <label><input type="checkbox" id="remindOn" ${state.settings.remind ? 'checked' : ''}> Напоминать о невыполненных задачах</label>
+      <label>в <input type="time" id="remindTime" value="${state.settings.time}"></label>
+      <button class="btn" id="remindTest" type="button">Проверить</button>
+    </div>
+    <p class="muted">Напоминание приходит, пока приложение открыто в браузере (вкладку можно держать в фоне).
+      Если в нужное время приложение было закрыто, напоминание появится при следующем открытии в этот же день.
+      ${notifyHint()}</p>
+  </div>`;
+}
+
+function notifyHint() {
+  if (!('Notification' in window)) return 'Системные уведомления в этом браузере недоступны: будет окно со звуком.';
+  if (Notification.permission === 'granted') return 'Системные уведомления включены.';
+  if (Notification.permission === 'denied') return 'Браузер запретил системные уведомления: будет окно со звуком.';
+  return '';
+}
+
+function render() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  app.innerHTML = view === 'month' ? banner() + renderMonth()
+    : view === 'tasks' ? renderTasks() : banner() + renderWeek();
+  const th = view === 'month' && app.querySelector('th.today');
+  if (th) { const sc = th.closest('.scroll'); sc.scrollLeft = Math.max(0, th.offsetLeft - sc.clientWidth / 2); }
+  const n = undone(todayKey()).length;
+  document.title = state.tasks.length && n ? `(${n}) Трекер задач` : 'Трекер задач';
+}
+
+// ---- Напоминания ----
+const modal = document.getElementById('modal');
+document.getElementById('modalOk').onclick = () => { modal.hidden = true; };
+modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+
+function beep() {
+  try {
+    const c = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.25].forEach(t => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(c.destination);
+      g.gain.setValueAtTime(0.2, c.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.2);
+      o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.2);
+    });
+  } catch (e) {}
+}
+
+function notify(list) {
+  const names = list.map(t => t.name);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const title = 'Не выполнено задач: ' + names.length;
+    const opts = { body: names.join(', '), tag: 'task-tracker', icon: 'icon-192.png' };
+    // На телефонах уведомления показываются только через service worker
+    const viaPage = () => { try { new Notification(title, opts).onclick = function () { window.focus(); this.close(); }; } catch (e) {} };
+    if (navigator.serviceWorker && navigator.serviceWorker.controller)
+      navigator.serviceWorker.ready.then(r => r.showNotification(title, opts)).catch(viaPage);
+    else viaPage();
+  }
+  document.getElementById('modalList').innerHTML = names.map(n => `<li>${esc(n)}</li>`).join('');
+  modal.hidden = false;
+  beep();
+}
+
+let lastDay = todayKey();
+function checkReminder() {
+  const tk = todayKey();
+  if (tk !== lastDay) { lastDay = tk; render(); }  // наступил новый день
+  const s = state.settings;
+  if (!s.remind || s.last === tk || !state.tasks.length) return;
+  const now = new Date();
+  if (pad(now.getHours()) + ':' + pad(now.getMinutes()) < s.time) return;
+  s.last = tk; save();
+  const list = undone(tk);
+  if (list.length) notify(list);
+}
+
+function askPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    try { Promise.resolve(Notification.requestPermission()).then(render, render); } catch (e) {}
+  }
+}
+
+function setView(v) {
+  view = v;
+  try { localStorage.setItem(KEY + '-view', v); } catch (e) {}
+  render();
+  if (v === 'tasks') { const i = document.getElementById('newTask'); if (i) i.focus(); }
+}
+
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (b) setView(b.dataset.view);
+});
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.k) toggle(d.k, d.id);
+  else if (d.move) { cursor = addDays(cursor, +d.move); render(); }
+  else if (d.month) { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + +d.month, 1); render(); }
+  else if ('today' in d) { cursor = new Date(); render(); }
+  else if (d.go) setView(d.go);
+  else if (b.id === 'remindTest') {
+    askPermission();
+    const list = undone(todayKey());
+    if (list.length) notify(list); else alert('Сегодня всё выполнено, напоминать не о чем.');
+  }
+  else if (d.up || d.down) {
+    const i = +(d.up ?? d.down), j = d.up ? i - 1 : i + 1;
+    [state.tasks[i], state.tasks[j]] = [state.tasks[j], state.tasks[i]];
+    save(); render();
+  } else if (d.del) {
+    const t = state.tasks.find(t => t.id === d.del);
+    if (!confirm(`Удалить задачу «${t.name}» вместе со всеми её отметками?`)) return;
+    state.tasks = state.tasks.filter(t => t.id !== d.del);
+    for (const k in state.checks) {
+      delete state.checks[k][d.del];
+      if (!Object.keys(state.checks[k]).length) delete state.checks[k];
+    }
+    save(); render();
+  }
+});
+
+app.addEventListener('change', e => {
+  const s = state.settings;
+  if (e.target.id === 'remindOn') {
+    s.remind = e.target.checked; s.last = '';
+    if (s.remind) askPermission();
+    save(); checkReminder(); return;
+  }
+  if (e.target.id === 'remindTime') {
+    if (e.target.value) { s.time = e.target.value; s.last = ''; save(); }
+    return;
+  }
+  const id = e.target.dataset.rename; if (!id) return;
+  const t = state.tasks.find(t => t.id === id), v = e.target.value.trim();
+  if (v) { t.name = v; save(); } else e.target.value = t.name;
+});
+
+app.addEventListener('submit', e => {
+  e.preventDefault();
+  const i = document.getElementById('newTask'), v = i.value.trim();
+  if (!v) return;
+  state.tasks.push({ id: uid(), name: v });
+  save(); render();
+  document.getElementById('newTask').focus();
+});
+
+function download(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+document.getElementById('print').onclick = () => window.print();
+
+document.getElementById('export').onclick = () =>
+  download(`трекер-задач-${todayKey()}.json`, JSON.stringify(state, null, 2), 'application/json');
+
+document.getElementById('csv').onclick = () => {
+  const y = cursor.getFullYear(), m = cursor.getMonth(), n = new Date(y, m + 1, 0).getDate();
+  const days = [...Array(n)].map((_, i) => new Date(y, m, i + 1));
+  const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+  const rows = [['Задача', ...days.map(d => d.getDate()), 'Итого'].map(q).join(';')];
+  state.tasks.forEach(t => {
+    const marks = days.map(d => isDone(dkey(d), t.id) ? '1' : '');
+    rows.push([q(t.name), ...marks, marks.filter(Boolean).length].join(';'));
+  });
+  download(`отчёт-${MONTHS[m]}-${y}.csv`, '﻿' + rows.join('\r\n'), 'text/csv;charset=utf-8');
+};
+
+const file = document.getElementById('file');
+document.getElementById('import').onclick = () => file.click();
+file.onchange = () => {
+  const f = file.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const s = JSON.parse(r.result);
+      if (!Array.isArray(s.tasks) || typeof s.checks !== 'object') throw 0;
+      if (!confirm('Заменить текущие данные данными из файла?')) return;
+      state = withDefaults(s); save(); render();
+    } catch (e) { alert('Файл не похож на резервную копию трекера.'); }
+    file.value = '';
+  };
+  r.readAsText(f);
+};
+
+render();
+checkReminder();
+setInterval(checkReminder, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); checkReminder(); } });
+
+// Работа без интернета и защита данных от автоочистки
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+</body>
+</html>
