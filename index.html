@@ -66,8 +66,16 @@ tfoot td{color:var(--muted);font-size:12px;border-bottom:0}
 .stat span{color:var(--muted);font-size:13px}
 .empty{color:var(--muted);text-align:center;padding:30px 10px}
 .tasklist{list-style:none;margin:0;padding:0}
-.tasklist li{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
-.tasklist input{flex:1;min-width:0}
+.tasklist li{padding:8px 0;border-bottom:1px solid var(--line)}
+.trow{display:flex;gap:6px;align-items:center}
+.trow input{flex:1;min-width:0}
+.sched{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.sched select,input[type=date]{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:6px 8px;font:inherit;font-size:16px}
+.dows{display:flex;gap:4px;flex-wrap:wrap}
+.dow{min-width:36px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:8px;padding:6px 4px;font:inherit;font-size:13px;cursor:pointer}
+.dow.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.off{display:inline-block;width:38px;line-height:38px;color:var(--muted);opacity:.5}
+.month .off{width:24px;line-height:24px}
 input[type=text]{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit}
 .add{display:flex;gap:8px;margin-top:12px}
 .add input{flex:1;min-width:0}
@@ -190,59 +198,80 @@ function toggle(k, id) {
   save(); render();
 }
 
+// ---- Расписание задачи ----
+// t.days — дни недели (0 = Пн … 6 = Вс), t.date — разовая задача на дату; без них — каждый день
+const scheduled = (t, d) => t.date ? dkey(d) === t.date : t.days ? t.days.includes(dowIdx(d)) : true;
+const counts = (t, d) => scheduled(t, d) || isDone(dkey(d), t.id);
+const visible = days => state.tasks.filter(t => days.some(d => counts(t, d)));
+function schedLabel(t) {
+  if (t.date) { const p = t.date.split('-'); return `${+p[2]} ${MONTHS_GEN[p[1] - 1]} ${p[0]}`; }
+  if (t.days && t.days.length < 7) {
+    const s = t.days.join(',');
+    if (s === '0,1,2,3,4') return 'по будням';
+    if (s === '5,6') return 'по выходным';
+    return t.days.map(i => DOW[i]).join(', ');
+  }
+  return '';
+}
+
 function cell(d, t) {
   const k = dkey(d), on = isDone(k, t.id), future = k > todayKey();
+  if (!counts(t, d)) return '<span class="off" title="Не запланировано">·</span>';
   return `<button class="cell${on ? ' on' : ''}${future ? ' future' : ''}" data-k="${k}" data-id="${t.id}"
     aria-pressed="${on}" title="${esc(t.name)} — ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}">✓</button>`;
+}
+
+function taskStats(t, days) {
+  const tk = todayKey();
+  const plan = days.filter(d => counts(t, d));
+  const done = plan.filter(d => isDone(dkey(d), t.id)).length;
+  return { done, plan: plan.length, p: pct(done, plan.filter(d => dkey(d) <= tk).length) };
+}
+
+function dayStat(d, tasks) {
+  const list = tasks.filter(t => counts(t, d));
+  return list.length ? `${list.filter(t => isDone(dkey(d), t.id)).length}/${list.length}` : '–';
 }
 
 const narrow = matchMedia('(max-width:600px)');
 narrow.addEventListener ? narrow.addEventListener('change', () => render()) : narrow.addListener(() => render());
 
 // Неделя на телефоне: название задачи отдельной строкой, под ним 7 галочек
-function compactWeek(days) {
+function compactWeek(days, tasks) {
   const tk = todayKey();
-  const elapsed = days.filter(d => dkey(d) <= tk).length;
   const cls = d => dkey(d) === tk ? 'today' : dowIdx(d) >= 5 ? 'weekend' : '';
   let head = '<tr>' + days.map(d => `<th class="${cls(d)}">${DOW[dowIdx(d)]}<br>${d.getDate()}</th>`).join('') + '</tr>';
   let body = '';
-  state.tasks.forEach(t => {
-    const done = days.filter(d => isDone(dkey(d), t.id)).length;
-    body += `<tr class="tname"><td colspan="7"><span>${esc(t.name)}</span><span class="pct">${done}/7 · ${pct(done, elapsed)}%</span></td></tr>`;
+  tasks.forEach(t => {
+    const s = taskStats(t, days), lbl = schedLabel(t);
+    body += `<tr class="tname"><td colspan="7"><span>${esc(t.name)}</span><span class="pct">${s.done}/${s.plan} · ${s.p}%${lbl ? ' · ' + lbl : ''}</span></td></tr>`;
     body += '<tr class="tcells">' + days.map(d => `<td class="${cls(d)}">${cell(d, t)}</td>`).join('') + '</tr>';
   });
-  const foot = '<tr>' + days.map(d => `<td>${state.tasks.filter(t => isDone(dkey(d), t.id)).length}/${state.tasks.length}</td>`).join('') + '</tr>';
+  const foot = '<tr>' + days.map(d => `<td>${dayStat(d, tasks)}</td>`).join('') + '</tr>';
   return `<table class="week compact"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table>
     <p class="muted" style="text-align:center;margin:4px 0 0">выполнено за день</p>`;
 }
 
 function grid(days, cls) {
-  if (cls === 'week' && narrow.matches) return compactWeek(days);
+  const tasks = visible(days);
+  if (!tasks.length) return '<p class="empty">На этот период задач по расписанию нет.</p>';
+  if (cls === 'week' && narrow.matches) return compactWeek(days, tasks);
   const tk = todayKey();
-  const elapsed = days.filter(d => dkey(d) <= tk).length;
+  const dc = d => dkey(d) === tk ? 'today' : dowIdx(d) >= 5 ? 'weekend' : '';
   let head = '<tr><th class="name">Задача</th>';
-  days.forEach(d => {
-    const k = dkey(d), we = dowIdx(d) >= 5;
-    head += `<th class="${k === tk ? 'today' : we ? 'weekend' : ''}">${DOW[dowIdx(d)]}<br>${d.getDate()}</th>`;
-  });
+  days.forEach(d => { head += `<th class="${dc(d)}">${DOW[dowIdx(d)]}<br>${d.getDate()}</th>`; });
   head += '<th class="total">Итого</th></tr>';
 
   let body = '';
-  state.tasks.forEach(t => {
-    const done = days.filter(d => isDone(dkey(d), t.id)).length;
-    body += `<tr><td class="name">${esc(t.name)}</td>`;
-    days.forEach(d => {
-      const k = dkey(d), we = dowIdx(d) >= 5;
-      body += `<td class="${k === tk ? 'today' : we ? 'weekend' : ''}">${cell(d, t)}</td>`;
-    });
-    body += `<td class="total">${done}/${days.length}<br><span class="pct">${pct(done, elapsed)}%</span></td></tr>`;
+  tasks.forEach(t => {
+    const s = taskStats(t, days), lbl = schedLabel(t);
+    body += `<tr><td class="name">${esc(t.name)}${lbl ? `<br><span class="pct">${lbl}</span>` : ''}</td>`;
+    days.forEach(d => { body += `<td class="${dc(d)}">${cell(d, t)}</td>`; });
+    body += `<td class="total">${s.done}/${s.plan}<br><span class="pct">${s.p}%</span></td></tr>`;
   });
 
   let foot = '<tr><td class="name">Выполнено за день</td>';
-  days.forEach(d => {
-    const n = state.tasks.filter(t => isDone(dkey(d), t.id)).length;
-    foot += `<td>${n}/${state.tasks.length}</td>`;
-  });
+  days.forEach(d => { foot += `<td>${dayStat(d, tasks)}</td>`; });
   foot += '<td></td></tr>';
 
   return `<div class="scroll"><table class="${cls}"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
@@ -250,15 +279,16 @@ function grid(days, cls) {
 
 function summary(days) {
   const tk = todayKey();
-  const past = days.filter(d => dkey(d) <= tk);
-  const total = state.tasks.length;
-  let done = 0, perfect = 0;
+  let done = 0, possible = 0, perfect = 0;
   days.forEach(d => {
-    const n = state.tasks.filter(t => isDone(dkey(d), t.id)).length;
+    const k = dkey(d), list = state.tasks.filter(t => counts(t, d));
+    const n = list.filter(t => isDone(k, t.id)).length;
     done += n;
-    if (total && n === total) perfect++;
+    if (k <= tk) {
+      possible += list.length;
+      if (list.length && n === list.length) perfect++;
+    }
   });
-  const possible = past.length * total;
   let best = null;
   state.tasks.forEach(t => {
     const n = days.filter(d => isDone(dkey(d), t.id)).length;
@@ -267,7 +297,8 @@ function summary(days) {
   return { done, possible, perfect, best, p: pct(done, possible) };
 }
 
-const undone = k => state.tasks.filter(t => !isDone(k, t.id));
+// Задачи, запланированные на день d и ещё не выполненные
+const undone = d => state.tasks.filter(t => scheduled(t, d) && !isDone(dkey(d), t.id));
 
 function chips(k, list) {
   return `<div class="chips">${list.map(t =>
@@ -276,14 +307,15 @@ function chips(k, list) {
 
 function banner() {
   if (!state.tasks.length) return '';
-  const tk = todayKey(), yk = dkey(addDays(new Date(), -1));
-  const today = undone(tk), yest = undone(yk);
+  const now = new Date(), yd = addDays(now, -1);
+  const today = undone(now), yest = undone(yd);
+  const planned = state.tasks.filter(t => scheduled(t, now)).length;
   if (!today.length && !yest.length)
-    return `<div class="card alert ok"><b>✓ Все задачи на сегодня выполнены!</b></div>`;
+    return `<div class="card alert ok"><b>${planned ? '✓ Все задачи на сегодня выполнены!' : 'На сегодня задач по расписанию нет.'}</b></div>`;
   let html = '<div class="card alert">';
-  if (today.length) html += `<h3>Не выполнено сегодня (${today.length} из ${state.tasks.length})</h3>` + chips(tk, today);
-  else html += `<h3>✓ Сегодня всё выполнено</h3>`;
-  if (yest.length) html += `<p class="muted">Пропущено вчера (${yest.length}):</p>` + chips(yk, yest);
+  if (today.length) html += `<h3>Не выполнено сегодня (${today.length} из ${planned})</h3>` + chips(dkey(now), today);
+  else html += `<h3>${planned ? '✓ Сегодня всё выполнено' : 'На сегодня задач нет'}</h3>`;
+  if (yest.length) html += `<p class="muted">Пропущено вчера (${yest.length}):</p>` + chips(dkey(yd), yest);
   return html + '<p class="muted">Нажмите на задачу, чтобы отметить её выполненной.</p></div>';
 }
 
@@ -327,27 +359,45 @@ function renderMonth() {
     ${state.tasks.length ? `
     <div class="stats">
       <div class="stat"><b>${s.p}%</b><span>выполнено за месяц</span><div class="bar"><i style="width:${s.p}%"></i></div></div>
-      <div class="stat"><b>${s.done} / ${s.possible}</b><span>отметок из возможных</span></div>
+      <div class="stat"><b>${s.done} / ${s.possible}</b><span>отметок из запланированных</span></div>
       <div class="stat"><b>${s.perfect}</b><span>дней, когда выполнено всё</span></div>
       <div class="stat"><b style="font-size:17px">${s.best && s.best.n ? esc(s.best.name) : '—'}</b><span>лучшая задача${s.best && s.best.n ? ` (${s.best.n} дн.)` : ''}</span></div>
     </div>` + grid(days, 'month') : ''}
   </div>${state.tasks.length ? '' : emptyMsg()}`;
 }
 
+function schedEditor(t) {
+  const mode = t.date ? 'once' : t.days ? 'days' : 'daily';
+  const opt = (v, txt) => `<option value="${v}"${mode === v ? ' selected' : ''}>${txt}</option>`;
+  let extra = '';
+  if (mode === 'days') extra = `<div class="dows">${DOW.map((n, i) =>
+    `<button type="button" class="dow${t.days.includes(i) ? ' on' : ''}" data-dow="${i}" data-task="${t.id}" aria-pressed="${t.days.includes(i)}">${n}</button>`).join('')}</div>`;
+  if (mode === 'once') extra = `<input type="date" data-date="${t.id}" value="${t.date}">`;
+  return `<div class="sched">
+      <select data-mode="${t.id}" aria-label="Расписание">${opt('daily', 'Каждый день')}${opt('days', 'По дням недели')}${opt('once', 'Один раз (дата)')}</select>
+      ${extra}
+    </div>`;
+}
+
 function renderTasks() {
   const items = state.tasks.map((t, i) => `<li>
-      <input type="text" value="${esc(t.name)}" data-rename="${t.id}" aria-label="Название задачи">
-      <button class="btn icon" data-up="${i}" ${i === 0 ? 'disabled' : ''} title="Выше">↑</button>
-      <button class="btn icon" data-down="${i}" ${i === state.tasks.length - 1 ? 'disabled' : ''} title="Ниже">↓</button>
-      <button class="btn icon danger" data-del="${t.id}" title="Удалить">✕</button>
+      <div class="trow">
+        <input type="text" value="${esc(t.name)}" data-rename="${t.id}" aria-label="Название задачи">
+        <button class="btn icon" data-up="${i}" ${i === 0 ? 'disabled' : ''} title="Выше">↑</button>
+        <button class="btn icon" data-down="${i}" ${i === state.tasks.length - 1 ? 'disabled' : ''} title="Ниже">↓</button>
+        <button class="btn icon danger" data-del="${t.id}" title="Удалить">✕</button>
+      </div>
+      ${schedEditor(t)}
     </li>`).join('');
   return `<div class="card">
     <h2 style="font-size:17px;margin:0 0 8px">Список задач</h2>
-    ${items ? `<ul class="tasklist">${items}</ul>` : '<p class="muted">Добавьте задачи, которые нужно отмечать каждый день.</p>'}
+    ${items ? `<ul class="tasklist">${items}</ul>` : '<p class="muted">Добавьте задачи, которые нужно отмечать.</p>'}
     <form class="add" id="addForm">
       <input type="text" id="newTask" placeholder="Например: Зарядка, Чтение 30 минут…" autocomplete="off">
       <button class="btn primary">Добавить</button>
     </form>
+    <p class="muted">Для каждой задачи можно выбрать расписание: каждый день, по дням недели или один раз в определённую дату.
+      В дни вне расписания задача не считается пропущенной.</p>
   </div>
   <div class="card">
     <h2 style="font-size:17px;margin:0 0 8px">Напоминание</h2>
@@ -375,7 +425,7 @@ function render() {
     : view === 'tasks' ? renderTasks() : banner() + renderWeek();
   const th = view === 'month' && app.querySelector('th.today');
   if (th) { const sc = th.closest('.scroll'); sc.scrollLeft = Math.max(0, th.offsetLeft - sc.clientWidth / 2); }
-  const n = undone(todayKey()).length;
+  const n = undone(new Date()).length;
   document.title = state.tasks.length && n ? `(${n}) Трекер задач` : 'Трекер задач';
 }
 
@@ -422,7 +472,7 @@ function checkReminder() {
   const now = new Date();
   if (pad(now.getHours()) + ':' + pad(now.getMinutes()) < s.time) return;
   s.last = tk; save();
-  const list = undone(tk);
+  const list = undone(new Date());
   if (list.length) notify(list);
 }
 
@@ -447,13 +497,19 @@ app.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const d = b.dataset;
   if (d.k) toggle(d.k, d.id);
+  else if (d.dow) {
+    const t = state.tasks.find(t => t.id === d.task), i = +d.dow;
+    if (t.days.includes(i)) { if (t.days.length === 1) return; t.days = t.days.filter(x => x !== i); }
+    else t.days = [...t.days, i].sort();
+    save(); render();
+  }
   else if (d.move) { cursor = addDays(cursor, +d.move); render(); }
   else if (d.month) { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + +d.month, 1); render(); }
   else if ('today' in d) { cursor = new Date(); render(); }
   else if (d.go) setView(d.go);
   else if (b.id === 'remindTest') {
     askPermission();
-    const list = undone(todayKey());
+    const list = undone(new Date());
     if (list.length) notify(list); else alert('Сегодня всё выполнено, напоминать не о чем.');
   }
   else if (d.up || d.down) {
@@ -483,7 +539,20 @@ app.addEventListener('change', e => {
     if (e.target.value) { s.time = e.target.value; s.last = ''; save(); }
     return;
   }
-  const id = e.target.dataset.rename; if (!id) return;
+  const ds = e.target.dataset;
+  if (ds.mode) {
+    const t = state.tasks.find(t => t.id === ds.mode);
+    delete t.days; delete t.date;
+    if (e.target.value === 'days') t.days = [0, 1, 2, 3, 4];
+    if (e.target.value === 'once') t.date = todayKey();
+    save(); render(); return;
+  }
+  if (ds.date) {
+    const t = state.tasks.find(t => t.id === ds.date);
+    if (e.target.value) { t.date = e.target.value; save(); } else e.target.value = t.date;
+    return;
+  }
+  const id = ds.rename; if (!id) return;
   const t = state.tasks.find(t => t.id === id), v = e.target.value.trim();
   if (v) { t.name = v; save(); } else e.target.value = t.name;
 });
@@ -516,8 +585,9 @@ document.getElementById('csv').onclick = () => {
   const q = s => '"' + String(s).replace(/"/g, '""') + '"';
   const rows = [['Задача', ...days.map(d => d.getDate()), 'Итого'].map(q).join(';')];
   state.tasks.forEach(t => {
-    const marks = days.map(d => isDone(dkey(d), t.id) ? '1' : '');
-    rows.push([q(t.name), ...marks, marks.filter(Boolean).length].join(';'));
+    if (!days.some(d => counts(t, d))) return;
+    const marks = days.map(d => isDone(dkey(d), t.id) ? '1' : counts(t, d) ? '' : '–');
+    rows.push([q(t.name), ...marks, marks.filter(m => m === '1').length].join(';'));
   });
   download(`отчёт-${MONTHS[m]}-${y}.csv`, '﻿' + rows.join('\r\n'), 'text/csv;charset=utf-8');
 };
