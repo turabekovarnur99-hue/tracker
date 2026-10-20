@@ -300,20 +300,6 @@ function summary(days) {
 // Задачи, запланированные на день d и ещё не выполненные
 const undone = d => state.tasks.filter(t => scheduled(t, d) && !isDone(dkey(d), t.id));
 
-function chips(k, list) {
-  return `<div class="chips">${list.map(t =>
-    `<button class="chip" data-k="${k}" data-id="${t.id}" title="Отметить выполненной">${esc(t.name)}</button>`).join('')}</div>`;
-}
-
-// Плашка показывается, только если вчера были пропущенные задачи
-function banner() {
-  if (!state.tasks.length) return '';
-  const yd = addDays(new Date(), -1), yest = undone(yd);
-  if (!yest.length) return '';
-  return `<div class="card alert"><h3>Пропущено вчера (${yest.length})</h3>` + chips(dkey(yd), yest) +
-    '<p class="muted">Нажмите на задачу, чтобы отметить её выполненной.</p></div>';
-}
-
 function emptyMsg() {
   return `<div class="card empty">Задач пока нет.<br><br><button class="btn primary" data-go="tasks">Добавить задачи</button></div>`;
 }
@@ -416,8 +402,8 @@ function notifyHint() {
 
 function render() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  app.innerHTML = view === 'month' ? banner() + renderMonth()
-    : view === 'tasks' ? renderTasks() : banner() + renderWeek();
+  app.innerHTML = view === 'month' ? renderMonth()
+    : view === 'tasks' ? renderTasks() : renderWeek();
   const th = view === 'month' && app.querySelector('th.today');
   if (th) { const sc = th.closest('.scroll'); sc.scrollLeft = Math.max(0, th.offsetLeft - sc.clientWidth / 2); }
   const n = undone(new Date()).length;
