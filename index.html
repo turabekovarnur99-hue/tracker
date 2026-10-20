@@ -305,18 +305,13 @@ function chips(k, list) {
     `<button class="chip" data-k="${k}" data-id="${t.id}" title="Отметить выполненной">${esc(t.name)}</button>`).join('')}</div>`;
 }
 
+// Плашка показывается, только если вчера были пропущенные задачи
 function banner() {
   if (!state.tasks.length) return '';
-  const now = new Date(), yd = addDays(now, -1);
-  const today = undone(now), yest = undone(yd);
-  const planned = state.tasks.filter(t => scheduled(t, now)).length;
-  if (!today.length && !yest.length)
-    return `<div class="card alert ok"><b>${planned ? '✓ Все задачи на сегодня выполнены!' : 'На сегодня задач по расписанию нет.'}</b></div>`;
-  let html = '<div class="card alert">';
-  if (today.length) html += `<h3>Не выполнено сегодня (${today.length} из ${planned})</h3>` + chips(dkey(now), today);
-  else html += `<h3>${planned ? '✓ Сегодня всё выполнено' : 'На сегодня задач нет'}</h3>`;
-  if (yest.length) html += `<p class="muted">Пропущено вчера (${yest.length}):</p>` + chips(dkey(yd), yest);
-  return html + '<p class="muted">Нажмите на задачу, чтобы отметить её выполненной.</p></div>';
+  const yd = addDays(new Date(), -1), yest = undone(yd);
+  if (!yest.length) return '';
+  return `<div class="card alert"><h3>Пропущено вчера (${yest.length})</h3>` + chips(dkey(yd), yest) +
+    '<p class="muted">Нажмите на задачу, чтобы отметить её выполненной.</p></div>';
 }
 
 function emptyMsg() {
