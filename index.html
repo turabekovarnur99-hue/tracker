@@ -596,7 +596,18 @@ setInterval(checkReminder, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); checkReminder(); } });
 
 // Работа без интернета и защита данных от автоочистки
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  // Когда установилась новая версия приложения — сразу перезагрузить страницу
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloading) { reloading = true; location.reload(); }
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // На телефоне приложение часто не перезапускается, а возвращается из фона — проверяем обновления и тогда
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+}
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 </script>
 </body>
